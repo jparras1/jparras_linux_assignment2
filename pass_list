@@ -1,0 +1,137 @@
+#!/bin/bash
+#: Title       : pswdlist
+#: Version     : 1.0
+#: Description : get password list
+#: Options
+# Users can show passwords according to a service
+# Users can show passwords according to username or email
+# Users can show all passwords
+# Users can set verbose on
+
+#######################################
+# Print a Usage message.
+# Arguments:
+#   None
+# Outputs:
+#   Write a help message
+#######################################
+usage() {
+  echo ""
+  echo "Usage: ${0} [-v] [-a] [-s SERVICE] [-l LABEL]" >&2
+  echo 'List stored passwords.'
+  echo '  -a  ALL show all stored passwords.'
+  echo '  -s  SERVICE show passwords for a specific service.'
+  echo '  -l  LABEL show passwords for a specific username or email.'
+  echo '  -v  VERBOSE display output in verbose mode'
+  exit 1
+}
+
+# Password Database
+FILE=~/.password/password_db
+
+#######################################
+# log additional messages
+# locals:
+#   MESSAGE
+# Arguments:
+#   message to log
+# Outputs:
+#   log message passed as argument
+#######################################
+log() {
+  local MESSAGE="${@}"
+  if [[ "${VERBOSE}" = 'true' ]]; then
+    echo "${MESSAGE}"
+  fi
+}
+
+#############################################################
+# filters the database that matches a specified conditiion
+# locals:
+#   myfilter
+# Arguments:
+#   array containing filter/s
+# Outputs:
+#   passwords that matches the filter/s
+##############################################################
+filter() {
+  local -n myfilter=$1
+  echo ""
+
+  # Check if the file exists or is empty
+  if [[ ! -s "$FILE" || ! -f "$FILE" ]]; then
+    echo "Database does not exist"
+    exit 1
+  else
+    while IFS=',' read -r -a line; do
+      if [[ -n "${myfilter["service"]}" && "${myfilter["service"]}" != "${line[2]}" ]]; then
+        continue
+      fi
+      if [[ -n "${myfilter["label"]}" && "${myfilter["label"]}" != "${line[1]}" ]]; then
+        continue
+      fi
+      # show line if it passes all filters
+      echo -e "Service: ${line[2]}"
+      echo -e "\tUsername: ${line[1]}"
+      echo -e "\tPassword: ${line[3]}\n"
+    done < "$FILE"
+  fi
+}
+
+while getopts :vas:l: OPTION; do
+  case ${OPTION} in
+  v)
+    VERBOSE='true'
+    log 'Verbose mode on.'
+    ;;
+  a)
+    # show all passwords
+    SHOW_ALL=true
+    ;;
+  s)
+    # service associated with the password
+    SERVICE="${OPTARG}"
+    ;;
+  l)
+    # username or email associated with the password
+    LABEL="${OPTARG}"
+    ;;
+  :)
+    echo "Error: -${OPTARG} requires an argument"
+    usage
+    ;;
+  ?)
+    echo "Error: ${OPTION} not a valid option"
+    usage
+    ;;
+  esac
+done
+
+# if user didnt put any options, print usage
+if [[ $# -lt 1 ]]; then
+  usage
+fi
+
+# if user didnt put any options for -asl
+if [[ $SERVICE == "" && $SHOW_ALL == "" && $LABEL == "" ]]; then
+  echo "Error: -asl options cannot be all empty"
+  usage
+fi
+
+# array to be passed to filter function
+declare -A new_arr=()
+if [[ "${SHOW_ALL}" == "true" ]]; then
+  log "Showing all passwords"
+else
+  declare -A arr=(["service"]="${SERVICE}" ["label"]="${LABEL}")
+  # this for loop checks if a particular filter contains a value
+  for i in "${!arr[@]}"; do
+    if [[ -n "${arr[$i]}" ]]; then
+      new_arr+=(["${i}"]="${arr[$i]}")
+    fi
+  done
+fi
+# filter the passwords
+filter new_arr
+
+exit 0

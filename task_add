@@ -1,0 +1,119 @@
+#!/bin/bash
+#: Title       : taskadd
+#: Version     : 1.0
+#: Description : add task
+#: Options
+# Users can set a name for their task
+# Users can set a due date for their task
+# Users can set verbose on
+#######################################
+# Print a Usage message.
+# Arguments:
+#   None
+# Outputs:
+#   Write a help message
+#######################################
+usage() {
+  echo ""
+  echo "Usage: ${0} [-v] [-t TASK] [-d DUE_DATE]" >&2
+  echo 'Add a task to database'
+  echo ' Mandatory arguments'
+  echo '  -t TASK specify the name of the task'
+  echo ' Optional arguments'
+  echo '  -v VERBOSE display output in verbose mode'
+  echo '  -d DUE_DATE specify the due date for the task'
+  exit 1
+}
+
+################################################
+# Prints message of samples of date input.
+# Arguments:
+#   None
+# Outputs:
+#   Write a help message for entering due dates
+################################################
+date_sample() {
+  echo "Here are some valid date formats:"
+  echo " 2023-11-25"
+  echo " 20231125"
+  echo " 11/25/2023"
+  echo " 25-NOV-2023"
+  exit 1
+}
+
+#######################################
+# log additional messages
+# locals:
+#   MESSAGE
+# Arguments:
+#   message to log
+# Outputs:
+#   log message passed as argument
+#######################################
+log() {
+  local MESSAGE="${@}"
+  if [[ "${VERBOSE}" = 'true' ]]; then
+    echo "${MESSAGE}"
+  fi
+}
+
+while getopts :vt:d: OPTION; do
+  case ${OPTION} in
+    v)
+      VERBOSE='true'
+      log 'Verbose mode on.'
+      ;;
+    t)
+      TASK="${OPTARG}"
+      ;;
+    d)
+      # check if the date input can be converted to YYYY-MM-DD format
+      if [[ "$(date -d ${OPTARG} +'%Y-%m-%d')" ]]; then
+        DUE_DATE="$(date -d ${OPTARG} +'%Y-%m-%d')"
+      else
+        echo "Please enter a valid date"
+        date_sample
+      fi
+      ;;
+    :)
+      echo "Error: -${OPTARG} requires an argument"
+      usage
+      ;;
+    ?)
+      echo "Error: ${OPTION} not a valid option"
+      usage
+      ;;
+  esac
+done
+
+# if user didnt put any arguments
+if [[ $# -lt 1 ]]; then
+  usage
+fi
+# if TASK option is missing
+if [[ $TASK == "" ]]; then
+  echo "Error: You must enter a task to save"
+  exit 1
+fi
+
+# database for the task
+FILE=~/task/task_db
+
+# Generate an id for the password
+ID=$(~/bin/id_gen ${FILE})
+if [[ ${ID} == 1 ]]; then
+  $(mkdir ~/task)
+fi
+
+# store the data to database
+# Passwords will be stored in this format:
+# [ID],[TASK],[DUE_DATE]
+if [[ -z ${DUE_DATE} ]]; then
+  DATA="${ID},${TASK}"
+else
+  DATA="${ID},${TASK},${DUE_DATE}"
+fi
+echo "${DATA}" >> $FILE
+
+echo "Task saved!"
+exit 0

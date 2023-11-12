@@ -1,0 +1,138 @@
+#!/bin/bash
+#: Title       : pswdstore
+#: Version     : 1.0
+#: Description : store password
+#: Options
+# Users can set a 'service' with their password
+# Users can set a 'label' with their password
+# Users can enter their own password
+# Users can set verbose on
+
+#######################################
+# Print a Usage message.
+# Arguments:
+#   None
+# Outputs:
+#   Write a help message
+#######################################
+usage() {
+  echo ""
+  echo "Usage: ${0} [-v] [-s SERVICE] [-l LABEL] [-p PASSWORD]" >&2
+  echo 'Add and store password.'
+  echo ' Mandatory arguments'
+  echo '  -s SERVICE specify the service associated with the password.'
+  echo '  -l LABEL specify the username or email associated with the password.'
+  echo ' Optional arguments'
+  echo '  -v VERBOSE display output in verbose mode'
+  echo '  -p PASSWORD specify the password to store.'
+  echo '     if PASSWORD is ommitted, a secure random password will be generated.'
+  exit 1
+}
+
+#######################################
+# log additional messages
+# locals:
+#   MESSAGE
+# Arguments:
+#   message to log
+# Outputs:
+#   log message passed as argument
+#######################################
+log() {
+  local MESSAGE="${@}"
+  if [[ "${VERBOSE}" = 'true' ]]; then
+    echo -e "${MESSAGE}"
+  fi
+}
+
+while getopts :vp:s:l: OPTION; do
+  case ${OPTION} in
+    v)
+      VERBOSE='true'
+      log 'Verbose mode on.'
+      ;;
+    p)
+      PASSWORD="${OPTARG}"
+      # if user provided a password, checks if the password has uppercase, lowercase, number, etc
+      if ! [[ "${#PASSWORD}" -gt 8 && "${PASSWORD}" =~ [^a-zA-Z_0-9\s] ]]; then
+        echo "WEAK PASSWORD."
+	log "Password must be at least 8 characters long and contain:"
+	log " Uppercase letter"
+	log " Lowercase letter"
+	log " Number"
+	log " Special character"
+	exit 1
+      fi
+      ;;
+    s)
+      # service associated with the password
+      SERVICE="${OPTARG}"
+      ;;
+    l)
+      # username or email associated with the password
+      LABEL="${OPTARG}"
+      ;;
+    :)
+      # if an option is missing an argument, print usage
+      echo "Error: -${OPTARG} requires an argument"
+      usage
+      ;;
+    ?)
+      echo "Error: ${OPTION} not a valid option"
+      usage
+      ;;
+  esac
+done
+
+# if user didnt put any options, print usage
+if [[ $# -lt 1 ]]; then
+  usage
+fi
+
+# if SERVICE option is missing, print an error message
+if [[ $SERVICE == "" ]]; then
+  echo "You must enter a service associated with the password"
+  exit 1
+fi
+# if EMAIL ADDRESS and USERNAME is missing, print an error message
+if [[ $LABEL == "" ]]; then
+  echo "You must enter a username or email associated with the password"
+  exit 1
+fi
+
+# if PASSWORD option is omitted, use 'pass_gen' script to generate a password
+# ask the user for a specified length or special char for the password
+if [[ -z $PASSWORD ]]; then
+  echo "What is the preferred length for your password?"
+  read length
+  echo "Would you like to add a special character? [Y/N]"
+  read s_char
+  log '\nGenerating secure password'
+  if [[ "${s_char:0:1}" == "y" || "${s_char:0:1}" == "Y" ]]; then
+    PASSWORD=$(~/bin/pass_gen -l ${length} -s)
+  else
+    PASSWORD=$(~/bin/pass_gen -l ${length})
+  fi
+  log "Password Generated!"
+fi
+
+log "Generating ID for the entry..."
+
+# Password database
+FILE=~/.password/password_db
+
+# Generate an id for the entry
+ID=$(~/bin/id_gen ${FILE})
+if [[ ${ID} == 1 ]]; then
+  $(mkdir ~/.password)
+fi
+
+# Passwords will be stored in this format:
+# [ID],[USERNAME or EMAIL],[SERVICE],[PASSWORD]
+log "Storing password to database..."
+# store the data to db.txt
+DATA="${ID},${LABEL},${SERVICE},${PASSWORD}"
+echo "${DATA}" >> ${FILE}
+
+echo -e "\nPassword stored!"
+exit 0

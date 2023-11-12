@@ -1,0 +1,26 @@
+#!/bin/bash
+
+#: Title       : idgen
+#: Version     : 1.0
+#: Description : generate id
+
+# database name
+FILE=$1
+
+declare -a arr=()
+# Check if the file exists or is empty
+if [[ ! -s "$FILE" || ! -f "$FILE" ]]; then
+  ID=1
+else
+  while IFS=',' read -r -a line; do
+    # Add the id of each line to array
+    arr+=("${line[0]}")
+  done < "$FILE"
+
+  # Get the id of the last entry and add 1
+  last_id="${arr[-1]}"
+  ID=$((${last_id}+1))
+fi
+
+echo "${ID}"
+exit 0

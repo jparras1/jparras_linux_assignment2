@@ -1,0 +1,143 @@
+#!/bin/bash
+#: Title       : tasklist
+#: Version     : 1.0
+#: Description : list tasks
+#: Options
+# Users can show all task
+# Users can show tasks based on their due dates
+# Users can set verbose on
+#######################################
+# Print a Usage message.
+# Arguments:
+#   None
+# Outputs:
+#   Write a help message
+#######################################
+usage() {
+  echo ""
+  echo "Usage: ${0} [-v] [-a] [-d DUE_DATE]" >&2
+  echo 'Show tasks from the database'
+  echo ' -a SHOW_ALL show all tasks'
+  echo ' -d DUE_DATE show tasks before a specified date'
+  echo ' -v VERBOSE display output in verbose mode'
+  exit 1
+}
+
+# Task database
+FILE=~/task/task_db
+
+#######################################
+# log additional messages
+# locals:
+#   MESSAGE
+# Arguments:
+#   message to log
+# Outputs:
+#   log message passed as argument
+#######################################
+log() {
+  local MESSAGE="${@}"
+  if [[ "${VERBOSE}" = 'true' ]]; then
+    echo -e "${MESSAGE}\n"
+  fi
+}
+
+#############################################################
+# filters the database that matches specified due date
+# locals:
+#   filter_date
+#   today
+#   task_date
+# Arguments:
+#   string containing the due date
+# Outputs:
+#   tasks before the due date
+##############################################################
+filter() {
+  local -n filter_date=$1
+  echo ""
+
+  # convert the dates to seconds with +%s
+  filter_date=$(date -d "${filter_date}" +%s)
+  local today=$(date +%s)
+  local task_date
+  
+  # Check if the file is empty
+  if [[ ! -s "$FILE" || ! -f "$FILE" ]]; then
+    echo "Database does not exist"
+    exit 1
+  else
+    while IFS=',' read -r -a line; do
+      # if task doesnt have a due date, go to the next line
+      if [[ -z "${line[2]}" ]]; then
+        continue
+      fi
+      task_date=$(date -d "${line[2]}" +%s)
+
+      # if filter date is after today's date
+      # show all tasks before the filter date and after today's date
+      if [[ ${filter_date} -gt ${today} ]]; then
+        if [[ ${task_date} -lt ${filter_date} && ${task_date} -gt ${today} ]]; then
+	  echo "Task: ${line[1]}"
+          echo -e "Due Date: ${line[2]}\n"
+        fi
+      # if filter date is before today's date
+      # show all tasks after the filter date and before today's date
+      elif [[ ${filter_date} -lt ${today} ]]; then
+        if [[ ${task_date} -gt ${filter_date} && ${task_date} -lt ${today} ]]; then
+          echo "Task: ${line[1]}"
+          echo -e "Due Date: ${line[2]}\n"
+        fi
+      fi
+    done < "$FILE"
+  fi
+}
+
+while getopts :vad: OPTION; do
+  case ${OPTION} in
+    v)
+      VERBOSE='true'
+      log 'Verbose mode on.'
+      ;;
+    a)
+      # show all tasks
+      SHOW_ALL=true
+      ;;
+    d)
+      FILTER_DATE="${OPTARG}"
+      ;;
+    :)
+      echo "Error: -${OPTARG} requires an argument"
+      usage
+      ;;
+    ?)
+      echo "Error: ${OPTION} not a valid option"
+      usage
+      ;;
+  esac
+done
+
+# if user didnt put any options, print usage
+if [[ $# -lt 1 ]]; then
+  usage
+fi
+
+# show all tasks
+if [[ "${SHOW_ALL}" == "true" || -z "${FILTER_DATE}" ]]; then
+  if [[ ! -s "$FILE" || ! -f "$FILE" ]]; then
+    echo "Database does not exist"
+    exit 1
+  else
+    while IFS=',' read -r -a line; do
+      echo "Task: ${line[1]}"
+      if [[ -n "${line[2]}" ]]; then
+        echo -e "Due Date: ${line[2]}\n"
+      else
+        echo ""
+      fi
+    done < "$FILE"
+  fi
+else
+  filter FILTER_DATE
+fi
+exit 0

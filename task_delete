@@ -1,0 +1,144 @@
+#!/bin/bash
+#: Title       : taskdelete
+#: Version     : 1.0
+#: Description : delete task
+#: Options
+# Users can delete task/s based on their id
+# Users can delete task/s based on their task name
+# Users can delete task/s passed their due dates
+# Users can set verbose on
+#######################################
+# Print a Usage message.
+# Arguments:
+#   None
+# Outputs:
+#   Write a help message
+#######################################
+usage() {
+  echo "Usage: ${0} [-v] [-i ID] [-t TASK] [-d]" >&2
+  echo 'Delete tasks from the database'
+  echo ' Mandatory arguments'
+  echo '  -i	ID delete task according to specified ID'
+  echo '  -t	TASK delete tasks according to specified task name'
+  echo '  -d	delete tasks that are passed their due dates'
+  echo ' Optional arguments'
+  echo '  -v	VERBOSE display output in verbose mode'
+  exit 1
+}
+
+# task database
+FILE=~/task/task_db
+
+#######################################
+# log additional messages
+# locals:
+#   MESSAGE
+# Arguments:
+#   message to log
+# Outputs:
+#   log message passed as argument
+#######################################
+log() {
+  local MESSAGE="${@}"
+  if [[ "${VERBOSE}" = 'true' ]]; then
+    echo "${MESSAGE}"
+  fi
+}
+
+##########################################################################
+# filters the database where tasks are deleted that matches a condition
+# locals:
+#   filter_date
+#   due_date
+#   match
+# Arguments:
+#   associative array containing the filters
+# Outputs:
+#   database containing tasks that were not deleted
+##########################################################################
+filter() {
+  local -n myfilter=$1
+
+  # Check if the file is empty
+  if [[ ! -s "$FILE" || ! -f "$FILE" ]]; then
+    echo "Database does not exist"
+    exit 1
+  else
+    while IFS=',' read -r -a line; do
+      # convert the days to seconds with +%s
+      local due_date=$(date -d "${line[2]}" +%s)
+
+      local match=true
+      if [[ -n "${myfilter["id"]}" && "${myfilter["id"]}" != "${line[0]}" ]]; then
+        match=false
+      fi
+      if [[ -n "${myfilter["task"]}" && "${myfilter["task"]}" != "${line[1]}" ]]; then
+        match=false
+      fi
+      if [[ -n "${myfilter["date"]}" && "${myfilter["date"]}" -lt "${due_date}" ]]; then
+        match=false
+      # if task doesnt have a due date, go to the next line
+      elif [[ -n "${myfilter["date"]}" && -z "${line[2]}" ]]; then
+        match=false
+      fi
+      # if the 'line' matches the filter, it will be ignored/deleted
+      if [[ "$match" == true ]]; then
+        continue
+      fi
+      # if the 'line' does not match the filter, it will be written to a new file
+      (IFS=','; echo "${line[*]}")
+      # this new file will now contain all the 'lines' that did not match the filter
+    done < "$FILE" > "${FILE}_new"
+  fi
+  # rename the new file to the original name
+  # this makes it seems like the tasks that match the filters were deleted from the list
+  mv "${FILE}_new" "${FILE}"
+}
+
+while getopts :vi:t:d OPTION; do
+  case ${OPTION} in
+  v)
+    VERBOSE='true'
+    log 'Verbose mode on.'
+    ;;
+  i)
+    # delete task/s by id
+    ID="${OPTARG}"
+    ;;
+  t)
+    # delete task/s by task name
+    TASK="${OPTARG}"
+    ;;
+  d)
+    # delete task/s passed their due dates
+    TODAY=$(date +%s)
+    ;;
+  :)
+    echo "Error: -${OPTARG} requires an argument"
+    usage
+    ;;
+  ?)
+    echo "Error: ${OPTION} not a valid option"
+    usage
+    ;;
+  esac
+done
+
+# if user didnt put any options, print usage
+if [[ $# -lt 1 ]]; then
+  usage
+fi
+
+# store the filters to an associative array
+declare -A arr=(["id"]="${ID}" ["task"]="${TASK}" ["date"]="${TODAY}")
+# array to be passed to filter function
+declare -A new_arr=()
+# this for loop checks if a particular filter contains a value
+for i in "${!arr[@]}"; do
+  if [[ -n "${arr[$i]}" ]]; then
+    new_arr+=(["${i}"]="${arr[$i]}")
+  fi
+done
+filter new_arr
+echo "Tasks deleted"
+exit 0
